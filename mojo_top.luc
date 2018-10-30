@@ -1,0 +1,531 @@
+module mojo_top (
+    input clk,              // 50MHz clock
+    input rst_n,            // reset button (active low)
+    output led [8],         // 8 user controllable LEDs
+    input cclk,             // configuration clock, AVR ready when high
+    output spi_miso,        // AVR SPI MISO
+    input spi_ss,           // AVR SPI Slave Select
+    input spi_mosi,         // AVR SPI MOSI
+    input spi_sck,          // AVR SPI Clock
+    output spi_channel [4], // AVR general purpose pins (used by default to select ADC channel)
+    input avr_tx,           // AVR TX (FPGA RX)
+    output avr_rx,          // AVR RX (FPGA TX)
+    input avr_rx_busy,       // AVR RX buffer full
+    output io_led [3][8],   // LEDs on IO Shield
+    output io_seg [8],      // 7-segment LEDs on IO Shield
+    output io_sel [4],      // Digit select on IO Shield
+    input io_button [5],    // 5 buttons on IO Shield
+    input io_dip [3][8]     // DIP switches on IO Shield
+  ) {
+ 
+  sig rst;                  // reset signal
+  sig inc;
+ 
+  .clk(clk) {
+    // The reset conditioner is used to synchronize the reset signal to the FPGA
+    // clock. This ensures the entire FPGA comes out of reset at the same time.
+    reset_conditioner reset_cond;
+ 
+    .rst(rst) {
+
+      store store (.iodip(io_dip), .iobutton(io_button)); 
+      
+      dff sum_led_reg[16];   // storage of sum
+      dff a_reg[16];         // storage of a
+      dff b_reg[16];         // storage of b
+      dff setted1[1];        // storage of a having been set
+      dff setted2[1];        // storage of b having been set
+      dff z_reg;             // storage of z
+      dff v_reg;             // storage of v
+      dff n_reg;             // storage of n
+      dff auto_reg;
+      dff counter[28];
+
+      
+      cpu cpu (.io_button(io_button));        // our snazzy cpu
+      
+      fsm state = {START,ONE,TWO,THREE,FOUR,END, POSADD, POSSUB, NEGADD, NEGSUB, AND, OR, XOR, LDR, SHIFTL, SHIFTR, SHIFTRA0, SHIFTRA1, CMPLT, CMPEQ, CMPLE, ZERO, OVERFLOW, NEGATIVE, ERROR};
+
+    }
+    
+  }
+  
+  sig a[16];
+  sig b[16];
+  sig lastButtons[8];
+  sig alufn[6];
+  sig error_b;
+ 
+  always {        
+    reset_cond.in = ~rst_n;   // input raw inverted reset signal
+    rst = reset_cond.out;     // conditioned reset
+ 
+    spi_miso = bz;            // not using SPI
+    spi_channel = bzzzz;      // not using flags
+    avr_rx = bz;              // not using serial port
+    led = 8h00;
+    
+    io_led = 3x{{8h00}};    // turn LEDs off
+    io_seg = 8hff;          // turn segments off
+    io_sel = 4hf;           // select no digits
+    
+    a = a_reg.q;
+    b = b_reg.q;
+    lastButtons = io_dip[0];
+    inc = 1;
+    
+      
+    // get next state counter
+    counter.d = counter.q + 1;  
+    
+    
+    //error button
+    error_b = 0;
+    if (io_button[0] == 1) {
+      error_b = 16b1;
+    }
+   
+    if (io_button[3] & io_button[4]){
+      auto_reg.d = ~auto_reg.q;      
+    }   
+    cpu.auto = auto_reg.q;    
+    //led[7] = auto_reg.q;
+
+    if (io_dip[0][1] == 1){
+      io_led[0][1] = 1;
+    }    
+    if (io_dip[0][0] == 1){
+      io_led[0][0] = 1;
+    }
+    
+    
+      
+    
+    // if cpu uses address 128
+    if(auto_reg.q == 0){
+// ===== MANUAL MODE =====
+//      state.d = state.START;
+       
+      if (store.set1){
+        setted1.d = store.set1;
+        a_reg.d = store.aa;
+    //    a = a_reg.q;
+      }
+      if (io_dip[0][1] == 0 & io_dip[0][0] == 1) {
+        io_led[1] = a_reg.q[7:0];
+        io_led[2] = a_reg.q[15:8];
+        led[0] = setted1.q;
+      }
+      
+      
+      if (store.set2){
+        setted2.d = store.set2;
+        b_reg.d = store.bb;
+    //    b = b_reg.q;
+      }
+      if (io_dip[0][1] == 1 & io_dip[0][0] == 0) {
+        io_led[1] = b_reg.q[7:0];
+        io_led[2] = b_reg.q[15:8];
+        led[1] = setted2.q;
+      }
+    } else {
+// ===== AUTO MODE =====         
+      alufn = 6b0;
+      case (state.q){
+        state.START:
+        if(counter.q[26] == 1){
+          counter.d = 0;
+          state.d = state.ONE;
+        }
+        state.ONE:
+        alufn = 6b0;
+        a = 6b10 + error_b;
+        b = 6b10;
+        // expected = 6b100         
+          
+        io_led[1] = sum_led_reg.q[7:0];
+        io_led[2] = sum_led_reg.q[15:8];
+        io_led[0][7] = z_reg.q;
+        io_led[0][6] = v_reg.q;
+        io_led[0][5] = n_reg.q;
+          
+        if(counter.q[26] == 1 && sum_led_reg.q ==6b100) {
+          counter.d = 0;
+          state.d = state.TWO;
+        
+        }else if(counter.q[26] == 1 && sum_led_reg.q != 6b100) {
+          counter.d = 0;
+          state.d = state.ERROR;
+        }
+        
+        state.TWO:
+        alufn = 6b1;
+        a = 6b10 + error_b;
+        b = 6b1;
+        // expected = 6b1        
+          
+        io_led[1] = sum_led_reg.q[7:0];
+        io_led[2] = sum_led_reg.q[15:8];
+        io_led[0][7] = z_reg.q;
+        io_led[0][6] = v_reg.q;
+        io_led[0][5] = n_reg.q;
+          
+        if(counter.q[26] == 1 && sum_led_reg.q ==6b1) {
+          counter.d = 0;
+          state.d = state.THREE;
+        
+        }else if(counter.q[26] == 1 && sum_led_reg.q != 6b1) {
+          counter.d = 0;
+          state.d = state.ERROR;
+        }  
+        state.THREE:
+        alufn = 6b1;
+        a = 6b1 + error_b;
+        b = 6b1;
+        // expected = 6B0 & Z = 1                 
+        io_led[1] = sum_led_reg.q[7:0];
+        io_led[2] = sum_led_reg.q[15:8];
+        io_led[0][7] = z_reg.q;
+        io_led[0][6] = v_reg.q;
+        io_led[0][5] = n_reg.q;
+        
+        if(counter.q[26] == 1 && sum_led_reg.q ==6b00) {
+          counter.d = 0;
+          state.d = state.FOUR;
+        
+        }else if(counter.q[26] == 1 && sum_led_reg.q != 6b0) {
+          counter.d = 0;
+          state.d = state.ERROR;
+        }
+        state.FOUR:
+        alufn = 6b0;  // addition
+        a = 16b100000000000000 + error_b;
+        b = 16b100000000000000;
+        // expected = 16b1000000000000000 & v = 1                 
+        io_led[1] = sum_led_reg.q[7:0];
+        io_led[2] = sum_led_reg.q[15:8];
+        io_led[0][7] = z_reg.q;
+        io_led[0][6] = v_reg.q;
+        io_led[0][5] = n_reg.q;
+        if(counter.q[26] == 1 && sum_led_reg.q ==1000000000000000) {
+          counter.d = 0;
+          state.d = state.START;
+        
+        }else if(counter.q[26] == 1 && sum_led_reg.q != 1000000000000000) {
+          counter.d = 0;
+          state.d = state.START;
+        }
+          
+        state.POSADD:
+        alufn = 6b0; // addition
+        a = 16b0010000011001000;
+        b = 16b0001000011001000;
+        // s = 0011000110010000
+        io_led[1] = sum_led_reg.q[7:0];
+        io_led[2] = sum_led_reg.q[15:8];
+        io_led[0][7] = z_reg.q;
+        io_led[0][6] = v_reg.q;
+        io_led[0][5] = n_reg.q;
+          
+        if(counter.q[26] == 1 && sum_led_reg.q ==0011000110010000) {
+          counter.d = 0;
+          state.d = state.POSSUB;
+        
+        }else if(counter.q[26] == 1 && sum_led_reg.q !=0011000110010000) {
+          counter.d = 0;
+          state.d = state.ERROR;
+        }
+                  
+        state.POSSUB:
+        alufn = 6b1; // subtraction
+        a = 16b0010000011001000;
+        b = 16b0001000011001000;
+        // s = 0001000000000000
+        io_led[1] = sum_led_reg.q[7:0];
+        io_led[2] = sum_led_reg.q[15:8];
+        io_led[0][7] = z_reg.q;
+        io_led[0][6] = v_reg.q;
+        io_led[0][5] = n_reg.q;
+        if(counter.q[26] == 1 && sum_led_reg.q ==0001000000000000) {
+          counter.d = 0;
+          state.d = state.NEGADD;
+        
+        }else if(counter.q[26] == 1 && sum_led_reg.q !=0001000000000000) {
+          counter.d = 0;
+          state.d = state.ERROR;
+        }
+                  
+        state.NEGADD:
+        alufn = 6b0; // addition
+        a = 16b1111111111111111;
+        b = 16b1111111111111111;
+        // s = 1111111111111110
+        io_led[1] = sum_led_reg.q[7:0];
+        io_led[2] = sum_led_reg.q[15:8];
+        io_led[0][7] = z_reg.q;
+        io_led[0][6] = v_reg.q;
+        io_led[0][5] = n_reg.q;
+        if(counter.q[26] == 1 && sum_led_reg.q ==1111111111111110) {
+          counter.d = 0;
+          state.d = state.NEGSUB;
+        
+        }else if(counter.q[26] == 1 && sum_led_reg.q !=1111111111111110) {
+          counter.d = 0;
+          state.d = state.ERROR;
+        }
+              
+        state.NEGSUB:
+        alufn = 6b1; //subtraction
+        a = 16b1000000011001000;
+        b = 16b1001000011001000;
+        // s = 0001000000000000
+        io_led[1] = sum_led_reg.q[7:0];
+        io_led[2] = sum_led_reg.q[15:8];
+        io_led[0][7] = z_reg.q;
+        io_led[0][6] = v_reg.q;
+        io_led[0][5] = n_reg.q;   
+        if(counter.q[26] == 1 && sum_led_reg.q ==0001000000000000) {
+          counter.d = 0;
+          state.d = state.AND;
+        
+        }else if(counter.q[26] == 1 && sum_led_reg.q !=0001000000000000) {
+          counter.d = 0;
+          state.d = state.ERROR;
+        }  
+          
+          
+        state.AND:        
+        alufn = 6b011000  ;
+        a = 16b0000000001000010;
+        b = 16b0000100001000000; 
+        // s = 0000000001000000
+        io_led[1] = sum_led_reg.q[7:0];
+        io_led[2] = sum_led_reg.q[15:8];
+        io_led[0][7] = z_reg.q;
+        io_led[0][6] = v_reg.q;
+        io_led[0][5] = n_reg.q; 
+        if(counter.q[26] == 1 && sum_led_reg.q ==0000000001000000) {
+          counter.d = 0;
+          state.d = state.OR;
+        
+        }else if(counter.q[26] == 1 && sum_led_reg.q !=0000000001000000) {
+          counter.d = 0;
+          state.d = state.ERROR;
+        }       
+              
+        state.OR:        
+        alufn = 6b011110;
+        a = 16b0000000000010100;
+        b = 16b0000000000000100; 
+        // s = 0000000000010100
+        io_led[1] = sum_led_reg.q[7:0];
+        io_led[2] = sum_led_reg.q[15:8];
+        io_led[0][7] = z_reg.q;
+        io_led[0][6] = v_reg.q;
+        io_led[0][5] = n_reg.q;  
+        if(counter.q[26] == 1 && sum_led_reg.q ==0000000000010100) {
+          counter.d = 0;
+          state.d = state.XOR;
+        
+        }else if(counter.q[26] == 1 && sum_led_reg.q !=0000000000010100) {
+          counter.d = 0;
+          state.d = state.ERROR;
+        }     
+          
+          
+        state.XOR:        
+        alufn = 6b010110;
+        a = 16b0000000000000010;
+        b = 16b0000000000001000; 
+        // s = 0000000000001010
+        io_led[1] = sum_led_reg.q[7:0];
+        io_led[2] = sum_led_reg.q[15:8];
+        io_led[0][7] = z_reg.q;
+        io_led[0][6] = v_reg.q;
+        io_led[0][5] = n_reg.q;
+        if(counter.q[26] == 1 && sum_led_reg.q ==0000000000001010) {
+          counter.d = 0;
+          state.d = state.LDR;
+        
+        }else if(counter.q[26] == 1 && sum_led_reg.q !=0000000000001010) {
+          counter.d = 0;
+          state.d = state.ERROR;
+        }               
+          
+        state.LDR:        
+        alufn = 6b011010;
+        a = 16b0000000000011000;
+        b = 16b0000000000000000; 
+        // s = 0000000000011000     
+        io_led[1] = sum_led_reg.q[7:0];
+        io_led[2] = sum_led_reg.q[15:8];
+        io_led[0][7] = z_reg.q;
+        io_led[0][6] = v_reg.q;
+        io_led[0][5] = n_reg.q;
+        if(counter.q[26] == 1 && sum_led_reg.q ==0000000000011000) {
+          counter.d = 0;
+          state.d = state.SHIFTL;
+        
+        }else if(counter.q[26] == 1 && sum_led_reg.q !=0000000000011000) {
+          counter.d = 0;
+          state.d = state.ERROR;
+        }  
+          
+                
+        state.SHIFTL:        
+        alufn = 6b100000;
+        a = 16b100011000100010;
+        b = 16b1; 
+        // s = 000110001000100    
+        io_led[1] = sum_led_reg.q[7:0];
+        io_led[2] = sum_led_reg.q[15:8];
+        io_led[0][7] = z_reg.q;
+        io_led[0][6] = v_reg.q;
+        io_led[0][5] = n_reg.q;    
+        
+        if(counter.q[26] == 1 && sum_led_reg.q ==000110001000100 ) {
+          counter.d = 0;
+          state.d = state.SHIFTR;
+        
+        }else if(counter.q[26] == 1 && sum_led_reg.q !=000110001000100 ) {
+          counter.d = 0;
+          state.d = state.ERROR;
+        }     
+            
+        state.SHIFTR:        
+        alufn = 6b100001;
+        a = 16b100011000100010;
+        b = 16b1; 
+        // s = 010001100010001     
+        io_led[1] = sum_led_reg.q[7:0];
+        io_led[2] = sum_led_reg.q[15:8];
+        io_led[0][7] = z_reg.q;
+        io_led[0][6] = v_reg.q;
+        io_led[0][5] = n_reg.q;
+                          
+        state. SHIFTRA0:       
+        alufn = 6b100011;
+        a = 16b000011000100010;
+        b = 16b10; 
+        // s = 000000110001000          
+        io_led[1] = sum_led_reg.q[7:0];
+        io_led[2] = sum_led_reg.q[15:8];
+        io_led[0][7] = z_reg.q;
+        io_led[0][6] = v_reg.q;
+        io_led[0][5] = n_reg.q;        
+          
+        state. SHIFTRA1:       
+        alufn = 6b100011;
+        a = 16b100011000100010;
+        b = 16b10; 
+        // s = 111000110001000
+        io_led[1] = sum_led_reg.q[7:0];
+        io_led[2] = sum_led_reg.q[15:8];
+        io_led[0][7] = z_reg.q;
+        io_led[0][6] = v_reg.q;
+        io_led[0][5] = n_reg.q;        
+          
+        state.CMPLT:
+        alufn = 6b110101;
+        a = 16b0000000011000000;
+        b = 16b0000000110000000; 
+        // s = 1        
+        io_led[1] = sum_led_reg.q[7:0];
+        io_led[2] = sum_led_reg.q[15:8];
+        io_led[0][7] = z_reg.q;
+        io_led[0][6] = v_reg.q;
+        io_led[0][5] = n_reg.q;
+                  
+        state.CMPEQ:        
+        alufn = 6b110111;
+        a = 16b0100000011100000;
+        b = 16b0100010011100000; 
+        // s = 0       
+        io_led[1] = sum_led_reg.q[7:0];
+        io_led[2] = sum_led_reg.q[15:8];
+        io_led[0][7] = z_reg.q;
+        io_led[0][6] = v_reg.q;
+        io_led[0][5] = n_reg.q;
+                      
+        state.CMPLE:        
+        alufn = 6b110111;
+        a = 16b0000000010000000;
+        b = 16b0000000010000000; 
+        // s = 1 
+        io_led[1] = sum_led_reg.q[7:0];
+        io_led[2] = sum_led_reg.q[15:8];
+        io_led[0][7] = z_reg.q;
+        io_led[0][6] = v_reg.q;
+        io_led[0][5] = n_reg.q;      
+                 
+        state.ZERO:
+        alufn = 6b1;
+        a = 16b0000000000000010;
+        b = 16b0000000000000010;  
+        // s = 0000000000000000
+        io_led[1] = sum_led_reg.q[7:0];
+        io_led[2] = sum_led_reg.q[15:8];
+        io_led[0][7] = z_reg.q;
+        io_led[0][6] = v_reg.q;
+        io_led[0][5] = n_reg.q;
+                          
+        state.OVERFLOW:
+        alufn = 6b0; //addition
+        a = 16b0100000000000000;
+        b = 16b0100000000000000; 
+        // s = 1000000000000000;
+        io_led[1] = sum_led_reg.q[7:0];
+        io_led[2] = sum_led_reg.q[15:8];
+        io_led[0][7] = z_reg.q;
+        io_led[0][6] = v_reg.q;
+        io_led[0][5] = n_reg.q;
+                  
+        state.NEGATIVE:
+        alufn = 6b0; //addition
+        a = 16b1000000000000000;
+        b = 16b0000000000000001;
+        // s = 1000000000000001;
+        io_led[1] = sum_led_reg.q[7:0];
+        io_led[2] = sum_led_reg.q[15:8];
+        io_led[0][7] = z_reg.q;
+        io_led[0][6] = v_reg.q;
+        io_led[0][5] = n_reg.q;
+          
+        state.ERROR:
+        io_led[0][4:2] = 111;
+        if(io_button[2] == 1){
+          state.d = state.START;
+        }
+          
+          
+          
+          
+        
+      }  // END OF CASE
+      lastButtons[7:2] = alufn;    
+    }
+
+    cpu.aa = a;
+    cpu.bb = b;
+    cpu.io_dip = lastButtons;
+
+    if (cpu.done) {
+//      io_led[1]= led_reg.q[0];          // connect LEDs to led_reg
+      led[4] = 1;
+      sum_led_reg.d = cpu.out;
+      z_reg.d = cpu.z;
+      v_reg.d = cpu.v;
+      n_reg.d = cpu.n;
+    }
+    if (io_dip[0][1] == 1 & io_dip[0][0] == 1) {
+      io_led[1] = sum_led_reg.q[7:0];
+      io_led[2] = sum_led_reg.q[15:8];
+      io_led[0][7] = z_reg.q;
+      io_led[0][6] = v_reg.q;
+      io_led[0][5] = n_reg.q;
+    //  led[7] = ~z_reg.q & ~v_reg.q & ~n_reg.q;
+    }
+
+  }
+}
+
