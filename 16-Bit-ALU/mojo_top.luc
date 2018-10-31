@@ -38,13 +38,13 @@ module mojo_top (
       dff z_reg;             // storage of z
       dff v_reg;             // storage of v
       dff n_reg;             // storage of n
-      dff auto_reg;
+      dff auto_reg;          // check if auto or manual
       dff counter[28];
 
       
       cpu cpu (.io_button(io_button));        // our snazzy cpu
       
-      fsm state = {START,ONE,TWO,THREE,FOUR,END, POSADD, POSSUB, NEGADD, NEGSUB, AND, OR, XOR, LDR, SHIFTL, SHIFTR, SHIFTRA0, SHIFTRA1, CMPLT, CMPEQ, CMPLE, ZERO, OVERFLOW, NEGATIVE, ERROR};
+      fsm state = {START, POSADD, POSSUB, NEGSUB, AND, OR, XOR, LDR, SHIFTL, SHIFTR, SHIFTRA0, SHIFTRA1, CMPLT, CMPEQ, CMPLE, ZERO, OVERFLOW, NEGATIVE, ERROR};
 
     }
     
@@ -98,18 +98,12 @@ module mojo_top (
       io_led[0][0] = 1;
     }
     
-    
-      
-    
-    // if cpu uses address 128
+
     if(auto_reg.q == 0){
 // ===== MANUAL MODE =====
-//      state.d = state.START;
-       
       if (store.set1){
         setted1.d = store.set1;
         a_reg.d = store.aa;
-    //    a = a_reg.q;
       }
       if (io_dip[0][1] == 0 & io_dip[0][0] == 1) {
         io_led[1] = a_reg.q[7:0];
@@ -121,7 +115,6 @@ module mojo_top (
       if (store.set2){
         setted2.d = store.set2;
         b_reg.d = store.bb;
-    //    b = b_reg.q;
       }
       if (io_dip[0][1] == 1 & io_dip[0][0] == 0) {
         io_led[1] = b_reg.q[7:0];
@@ -135,187 +128,90 @@ module mojo_top (
         state.START:
         if(counter.q[26] == 1){
           counter.d = 0;
-          state.d = state.ONE;
-        }
-        state.ONE:
-        alufn = 6b0;
-        a = 6b10 + error_b;
-        b = 6b10;
-        // expected = 6b100         
-          
-        io_led[1] = sum_led_reg.q[7:0];
-        io_led[2] = sum_led_reg.q[15:8];
-        io_led[0][7] = z_reg.q;
-        io_led[0][6] = v_reg.q;
-        io_led[0][5] = n_reg.q;
-          
-        if(counter.q[26] == 1 && sum_led_reg.q ==6b100) {
-          counter.d = 0;
-          state.d = state.TWO;
-        
-        }else if(counter.q[26] == 1 && sum_led_reg.q != 6b100) {
-          counter.d = 0;
-          state.d = state.ERROR;
-        }
-        
-        state.TWO:
-        alufn = 6b1;
-        a = 6b10 + error_b;
-        b = 6b1;
-        // expected = 6b1        
-          
-        io_led[1] = sum_led_reg.q[7:0];
-        io_led[2] = sum_led_reg.q[15:8];
-        io_led[0][7] = z_reg.q;
-        io_led[0][6] = v_reg.q;
-        io_led[0][5] = n_reg.q;
-          
-        if(counter.q[26] == 1 && sum_led_reg.q ==6b1) {
-          counter.d = 0;
-          state.d = state.THREE;
-        
-        }else if(counter.q[26] == 1 && sum_led_reg.q != 6b1) {
-          counter.d = 0;
-          state.d = state.ERROR;
-        }  
-        state.THREE:
-        alufn = 6b1;
-        a = 6b1 + error_b;
-        b = 6b1;
-        // expected = 6B0 & Z = 1                 
-        io_led[1] = sum_led_reg.q[7:0];
-        io_led[2] = sum_led_reg.q[15:8];
-        io_led[0][7] = z_reg.q;
-        io_led[0][6] = v_reg.q;
-        io_led[0][5] = n_reg.q;
-        
-        if(counter.q[26] == 1 && sum_led_reg.q ==6b00) {
-          counter.d = 0;
-          state.d = state.FOUR;
-        
-        }else if(counter.q[26] == 1 && sum_led_reg.q != 6b0) {
-          counter.d = 0;
-          state.d = state.ERROR;
-        }
-        state.FOUR:
-        alufn = 6b0;  // addition
-        a = 16b100000000000000 + error_b;
-        b = 16b100000000000000;
-        // expected = 16b1000000000000000 & v = 1                 
-        io_led[1] = sum_led_reg.q[7:0];
-        io_led[2] = sum_led_reg.q[15:8];
-        io_led[0][7] = z_reg.q;
-        io_led[0][6] = v_reg.q;
-        io_led[0][5] = n_reg.q;
-        if(counter.q[26] == 1 && sum_led_reg.q ==1000000000000000) {
-          counter.d = 0;
-          state.d = state.START;
-        
-        }else if(counter.q[26] == 1 && sum_led_reg.q != 1000000000000000) {
-          counter.d = 0;
-          state.d = state.START;
+          state.d = state.POSADD;
         }
           
-        state.POSADD:
+        state.POSADD:  // addition of positive numbers
         alufn = 6b0; // addition
-        a = 16b0010000011001000;
-        b = 16b0001000011001000;
-        // s = 0011000110010000
+        a = 16b11 + error_b;
+        b = 16b1;
+        // s = 100
         io_led[1] = sum_led_reg.q[7:0];
         io_led[2] = sum_led_reg.q[15:8];
         io_led[0][7] = z_reg.q;
         io_led[0][6] = v_reg.q;
         io_led[0][5] = n_reg.q;
           
-        if(counter.q[26] == 1 && sum_led_reg.q ==0011000110010000) {
+        if(counter.q[26] == 1 && sum_led_reg.q ==16b100) {
           counter.d = 0;
           state.d = state.POSSUB;
         
-        }else if(counter.q[26] == 1 && sum_led_reg.q !=0011000110010000) {
+        }else if(counter.q[26] == 1 && sum_led_reg.q !=16b100) {
           counter.d = 0;
           state.d = state.ERROR;
         }
                   
-        state.POSSUB:
+        state.POSSUB:    // subtraction of positive numbers
         alufn = 6b1; // subtraction
-        a = 16b0010000011001000;
-        b = 16b0001000011001000;
-        // s = 0001000000000000
+        a = 16b0000000000000010+ error_b;
+        b = 16b0000000000000001;
+        // s = 1
         io_led[1] = sum_led_reg.q[7:0];
         io_led[2] = sum_led_reg.q[15:8];
         io_led[0][7] = z_reg.q;
         io_led[0][6] = v_reg.q;
         io_led[0][5] = n_reg.q;
-        if(counter.q[26] == 1 && sum_led_reg.q ==0001000000000000) {
-          counter.d = 0;
-          state.d = state.NEGADD;
-        
-        }else if(counter.q[26] == 1 && sum_led_reg.q !=0001000000000000) {
-          counter.d = 0;
-          state.d = state.ERROR;
-        }
-                  
-        state.NEGADD:
-        alufn = 6b0; // addition
-        a = 16b1111111111111111;
-        b = 16b1111111111111111;
-        // s = 1111111111111110
-        io_led[1] = sum_led_reg.q[7:0];
-        io_led[2] = sum_led_reg.q[15:8];
-        io_led[0][7] = z_reg.q;
-        io_led[0][6] = v_reg.q;
-        io_led[0][5] = n_reg.q;
-        if(counter.q[26] == 1 && sum_led_reg.q ==1111111111111110) {
+        if(counter.q[26] == 1 && sum_led_reg.q ==0000000000000001) {
           counter.d = 0;
           state.d = state.NEGSUB;
         
-        }else if(counter.q[26] == 1 && sum_led_reg.q !=1111111111111110) {
+        }else if(counter.q[26] == 1 && sum_led_reg.q !=0000000000000001) {
           counter.d = 0;
           state.d = state.ERROR;
         }
-              
-        state.NEGSUB:
+                              
+        state.NEGSUB:    // subtration of negative numbers
         alufn = 6b1; //subtraction
-        a = 16b1000000011001000;
-        b = 16b1001000011001000;
-        // s = 0001000000000000
+        a = 16b1000000011001000+ error_b;
+        b = 16b1000000011001000;
+        // s = 0
         io_led[1] = sum_led_reg.q[7:0];
         io_led[2] = sum_led_reg.q[15:8];
         io_led[0][7] = z_reg.q;
         io_led[0][6] = v_reg.q;
         io_led[0][5] = n_reg.q;   
-        if(counter.q[26] == 1 && sum_led_reg.q ==0001000000000000) {
+        if(counter.q[26] == 1 && sum_led_reg.q ==0) {
           counter.d = 0;
           state.d = state.AND;
         
-        }else if(counter.q[26] == 1 && sum_led_reg.q !=0001000000000000) {
+        }else if(counter.q[26] == 1 && sum_led_reg.q !=0) {
           counter.d = 0;
           state.d = state.ERROR;
         }  
           
           
-        state.AND:        
+        state.AND:            // bool AND operation
         alufn = 6b011000  ;
-        a = 16b0000000001000010;
-        b = 16b0000100001000000; 
+        a = 16b0000000000000011+ error_b;
+        b = 16b0000000000000010; 
         // s = 0000000001000000
         io_led[1] = sum_led_reg.q[7:0];
         io_led[2] = sum_led_reg.q[15:8];
         io_led[0][7] = z_reg.q;
         io_led[0][6] = v_reg.q;
         io_led[0][5] = n_reg.q; 
-        if(counter.q[26] == 1 && sum_led_reg.q ==0000000001000000) {
+        if(counter.q[26] == 1 && sum_led_reg.q ==16b0000000000000010) {
           counter.d = 0;
           state.d = state.OR;
         
-        }else if(counter.q[26] == 1 && sum_led_reg.q !=0000000001000000) {
+        }else if(counter.q[26] == 1 && sum_led_reg.q !=16b0000000000000010) {
           counter.d = 0;
           state.d = state.ERROR;
         }       
               
-        state.OR:        
+        state.OR:            // bool OR operation        
         alufn = 6b011110;
-        a = 16b0000000000010100;
+        a = 16b0000000000010100+ error_b;
         b = 16b0000000000000100; 
         // s = 0000000000010100
         io_led[1] = sum_led_reg.q[7:0];
@@ -323,19 +219,19 @@ module mojo_top (
         io_led[0][7] = z_reg.q;
         io_led[0][6] = v_reg.q;
         io_led[0][5] = n_reg.q;  
-        if(counter.q[26] == 1 && sum_led_reg.q ==0000000000010100) {
+        if(counter.q[26] == 1 && sum_led_reg.q ==16b0000000000010100) {
           counter.d = 0;
           state.d = state.XOR;
         
-        }else if(counter.q[26] == 1 && sum_led_reg.q !=0000000000010100) {
+        }else if(counter.q[26] == 1 && sum_led_reg.q !=16b0000000000010100) {
           counter.d = 0;
           state.d = state.ERROR;
         }     
           
           
-        state.XOR:        
+        state.XOR:            // bool X0R operation        
         alufn = 6b010110;
-        a = 16b0000000000000010;
+        a = 16b0000000000000010+ error_b;
         b = 16b0000000000001000; 
         // s = 0000000000001010
         io_led[1] = sum_led_reg.q[7:0];
@@ -343,18 +239,18 @@ module mojo_top (
         io_led[0][7] = z_reg.q;
         io_led[0][6] = v_reg.q;
         io_led[0][5] = n_reg.q;
-        if(counter.q[26] == 1 && sum_led_reg.q ==0000000000001010) {
+        if(counter.q[26] == 1 && sum_led_reg.q ==16b0000000000001010) {
           counter.d = 0;
           state.d = state.LDR;
         
-        }else if(counter.q[26] == 1 && sum_led_reg.q !=0000000000001010) {
+        }else if(counter.q[26] == 1 && sum_led_reg.q !=16b0000000000001010) {
           counter.d = 0;
           state.d = state.ERROR;
         }               
           
-        state.LDR:        
+        state.LDR:            // outputs input a       
         alufn = 6b011010;
-        a = 16b0000000000011000;
+        a = 16b0000000000011000+ error_b;
         b = 16b0000000000000000; 
         // s = 0000000000011000     
         io_led[1] = sum_led_reg.q[7:0];
@@ -362,39 +258,39 @@ module mojo_top (
         io_led[0][7] = z_reg.q;
         io_led[0][6] = v_reg.q;
         io_led[0][5] = n_reg.q;
-        if(counter.q[26] == 1 && sum_led_reg.q ==0000000000011000) {
+        if(counter.q[26] == 1 && sum_led_reg.q ==16b0000000000011000) {
           counter.d = 0;
           state.d = state.SHIFTL;
         
-        }else if(counter.q[26] == 1 && sum_led_reg.q !=0000000000011000) {
+        }else if(counter.q[26] == 1 && sum_led_reg.q !=16b0000000000011000) {
           counter.d = 0;
           state.d = state.ERROR;
         }  
           
                 
-        state.SHIFTL:        
+        state.SHIFTL:    // shifts a but b to the left      
         alufn = 6b100000;
-        a = 16b100011000100010;
+        a = 16b0000011000100010+ error_b;
         b = 16b1; 
-        // s = 000110001000100    
+        // s = 0000110001000100    
         io_led[1] = sum_led_reg.q[7:0];
         io_led[2] = sum_led_reg.q[15:8];
         io_led[0][7] = z_reg.q;
         io_led[0][6] = v_reg.q;
         io_led[0][5] = n_reg.q;    
         
-        if(counter.q[26] == 1 && sum_led_reg.q ==000110001000100 ) {
+        if(counter.q[26] == 1 && sum_led_reg.q ==16b0000110001000100 ) {
           counter.d = 0;
           state.d = state.SHIFTR;
         
-        }else if(counter.q[26] == 1 && sum_led_reg.q !=000110001000100 ) {
+        }else if(counter.q[26] == 1 && sum_led_reg.q !=16b0000110001000100 ) {
           counter.d = 0;
           state.d = state.ERROR;
         }     
             
-        state.SHIFTR:        
+        state.SHIFTR:    // shifts a but b to the right          
         alufn = 6b100001;
-        a = 16b100011000100010;
+        a = 16b100011000100010+ error_b;
         b = 16b1; 
         // s = 010001100010001     
         io_led[1] = sum_led_reg.q[7:0];
@@ -402,32 +298,56 @@ module mojo_top (
         io_led[0][7] = z_reg.q;
         io_led[0][6] = v_reg.q;
         io_led[0][5] = n_reg.q;
+        if(counter.q[26] == 1 && sum_led_reg.q ==16b010001100010001 ) {
+          counter.d = 0;
+          state.d = state.SHIFTRA0;
+        
+        }else if(counter.q[26] == 1 && sum_led_reg.q !=16b010001100010001 ) {
+          counter.d = 0;
+          state.d = state.ERROR;
+        }   
                           
-        state. SHIFTRA0:       
+        state. SHIFTRA0:    // shift right of a positive number (taking sign into account)     
         alufn = 6b100011;
-        a = 16b000011000100010;
+        a = 16b000011000100010+ error_b;
         b = 16b10; 
         // s = 000000110001000          
         io_led[1] = sum_led_reg.q[7:0];
         io_led[2] = sum_led_reg.q[15:8];
         io_led[0][7] = z_reg.q;
         io_led[0][6] = v_reg.q;
-        io_led[0][5] = n_reg.q;        
+        io_led[0][5] = n_reg.q; 
+        if(counter.q[26] == 1 && sum_led_reg.q ==16b000000110001000  ) {
+          counter.d = 0;
+          state.d = state.SHIFTRA1;
+        
+        }else if(counter.q[26] == 1 && sum_led_reg.q !=16b000000110001000  ) {
+          counter.d = 0;
+          state.d = state.ERROR;
+        }          
           
-        state. SHIFTRA1:       
+        state. SHIFTRA1:    // shift right of a negative number (taking sign into account)        
         alufn = 6b100011;
-        a = 16b100011000100010;
+        a = 16b1100011000100010+ error_b;
         b = 16b10; 
-        // s = 111000110001000
+        // s = 111100110001000
         io_led[1] = sum_led_reg.q[7:0];
         io_led[2] = sum_led_reg.q[15:8];
         io_led[0][7] = z_reg.q;
         io_led[0][6] = v_reg.q;
-        io_led[0][5] = n_reg.q;        
+        io_led[0][5] = n_reg.q;
+        if(counter.q[26] == 1 && sum_led_reg.q ==16b1111000110001000  ) {
+          counter.d = 0;
+          state.d = state.CMPLT;
+        
+        }else if(counter.q[26] == 1 && sum_led_reg.q !=16b1111000110001000  ) {
+          counter.d = 0;
+          state.d = state.ERROR;
+        }           
           
-        state.CMPLT:
+        state.CMPLT:    // bool (a<b)
         alufn = 6b110101;
-        a = 16b0000000011000000;
+        a = 16b0000000011000000+ error_b;
         b = 16b0000000110000000; 
         // s = 1        
         io_led[1] = sum_led_reg.q[7:0];
@@ -435,10 +355,19 @@ module mojo_top (
         io_led[0][7] = z_reg.q;
         io_led[0][6] = v_reg.q;
         io_led[0][5] = n_reg.q;
+        if(counter.q[26] == 1 && sum_led_reg.q ==16b1  ) {
+          counter.d = 0;
+          state.d = state.CMPEQ;
+        
+        }else if(counter.q[26] == 1 && sum_led_reg.q !=16b1 ) {
+          counter.d = 0;
+          state.d = state.ERROR;
+        }           
+          
                   
-        state.CMPEQ:        
-        alufn = 6b110111;
-        a = 16b0100000011100000;
+        state.CMPEQ:    // bool (a=b)        
+        alufn = 6b110011;
+        a = 16b0100000011101000+ error_b;
         b = 16b0100010011100000; 
         // s = 0       
         io_led[1] = sum_led_reg.q[7:0];
@@ -446,21 +375,35 @@ module mojo_top (
         io_led[0][7] = z_reg.q;
         io_led[0][6] = v_reg.q;
         io_led[0][5] = n_reg.q;
+        if(counter.q[26] == 1 && sum_led_reg.q ==16b0  ) {
+          counter.d = 0;
+          state.d = state.CMPLE;     
+        }else if(counter.q[26] == 1 && sum_led_reg.q !=16b0 ) {
+          counter.d = 0;
+          state.d = state.ERROR;
+        }             
                       
-        state.CMPLE:        
+        state.CMPLE:    // bool (a<=b)        
         alufn = 6b110111;
-        a = 16b0000000010000000;
+        a = 16b0000000010000000+ error_b;
         b = 16b0000000010000000; 
         // s = 1 
         io_led[1] = sum_led_reg.q[7:0];
         io_led[2] = sum_led_reg.q[15:8];
         io_led[0][7] = z_reg.q;
         io_led[0][6] = v_reg.q;
-        io_led[0][5] = n_reg.q;      
+        io_led[0][5] = n_reg.q;
+        if(counter.q[26] == 1 && sum_led_reg.q ==16b1  ) {
+          counter.d = 0;
+          state.d = state.ZERO;     
+        }else if(counter.q[26] == 1 && sum_led_reg.q !=16b1 ) {
+          counter.d = 0;
+          state.d = state.ERROR;
+        }         
                  
-        state.ZERO:
+        state.ZERO:    // check if s = 0
         alufn = 6b1;
-        a = 16b0000000000000010;
+        a = 16b0000000000000010+ error_b;
         b = 16b0000000000000010;  
         // s = 0000000000000000
         io_led[1] = sum_led_reg.q[7:0];
@@ -468,10 +411,17 @@ module mojo_top (
         io_led[0][7] = z_reg.q;
         io_led[0][6] = v_reg.q;
         io_led[0][5] = n_reg.q;
+        if(counter.q[26] == 1 && sum_led_reg.q ==16b0  ) {
+          counter.d = 0;
+          state.d = state.OVERFLOW;     
+        }else if(counter.q[26] == 1 && sum_led_reg.q !=16b0 ) {
+          counter.d = 0;
+          state.d = state.ERROR;
+        }  
                           
-        state.OVERFLOW:
+        state.OVERFLOW:    // check if there is overflow
         alufn = 6b0; //addition
-        a = 16b0100000000000000;
+        a = 16b0100000000000000+ error_b;
         b = 16b0100000000000000; 
         // s = 1000000000000000;
         io_led[1] = sum_led_reg.q[7:0];
@@ -479,10 +429,17 @@ module mojo_top (
         io_led[0][7] = z_reg.q;
         io_led[0][6] = v_reg.q;
         io_led[0][5] = n_reg.q;
+        if(counter.q[26] == 1 && sum_led_reg.q ==16b1000000000000000 ) {
+          counter.d = 0;
+          state.d = state.NEGATIVE;     
+        }else if(counter.q[26] == 1 && sum_led_reg.q !=16b1000000000000000 ) {
+          counter.d = 0;
+          state.d = state.ERROR;
+        }            
                   
-        state.NEGATIVE:
+        state.NEGATIVE:    // check if s is a negative number
         alufn = 6b0; //addition
-        a = 16b1000000000000000;
+        a = 16b1000000000000000+ error_b;
         b = 16b0000000000000001;
         // s = 1000000000000001;
         io_led[1] = sum_led_reg.q[7:0];
@@ -490,27 +447,28 @@ module mojo_top (
         io_led[0][7] = z_reg.q;
         io_led[0][6] = v_reg.q;
         io_led[0][5] = n_reg.q;
+        if(counter.q[26] == 1 && sum_led_reg.q ==16b1000000000000001 ) {
+          counter.d = 0;
+          state.d = state.START;     
+        }else if(counter.q[26] == 1 && sum_led_reg.q !=16b1000000000000001 ) {
+          counter.d = 0;
+          state.d = state.ERROR;
+        }                      
           
-        state.ERROR:
-        io_led[0][4:2] = 111;
-        if(io_button[2] == 1){
+        state.ERROR:    // if output wrong
+        io_led[0][4:2] = 3b111;
+        if(io_button[2] == 1){    // reset the auto
           state.d = state.START;
         }
-          
-          
-          
-          
-        
+         
       }  // END OF CASE
       lastButtons[7:2] = alufn;    
     }
-
     cpu.aa = a;
     cpu.bb = b;
     cpu.io_dip = lastButtons;
 
     if (cpu.done) {
-//      io_led[1]= led_reg.q[0];          // connect LEDs to led_reg
       led[4] = 1;
       sum_led_reg.d = cpu.out;
       z_reg.d = cpu.z;
@@ -523,9 +481,7 @@ module mojo_top (
       io_led[0][7] = z_reg.q;
       io_led[0][6] = v_reg.q;
       io_led[0][5] = n_reg.q;
-    //  led[7] = ~z_reg.q & ~v_reg.q & ~n_reg.q;
     }
 
   }
 }
-

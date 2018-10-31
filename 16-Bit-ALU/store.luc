@@ -10,44 +10,33 @@ module store (
   ) {
   
   .clk(clk), .rst(rst) {
-    // 2D array of 16 by 8 since we want 16 registers of width 8.
-    dff reg[32][16]; // CPU Registers
+    dff reg[32][16];  // storage of values
   }
- 
-  // These signals aren't strictly needed, but they help make 
-  //the code a bit more readable by allowing us to rename parts
-  // of the instruction.
   
-  sig state[2];
   sig in[16];
  
-
   always {
-    in[7:0] =iodip[1];
+    in[7:0] = iodip[1];      // take in input from switch
     in[15:8] = iodip[2];
     aa= 0;
     bb = 0;
     set1 = 0;
     set2 = 0;   
-    state = iodip[0][1:0];
-    
     
     if (iodip[0][1] == 0 & iodip[0][0] == 1 & iobutton[1]){
-        reg.d[d1 ] = in;                   // set the reg to constant        
+        reg.d[d1 ] = in;                  // store a        
         aa = reg.q[d1];
         reg.d[d11] = 1;
-        set1 = reg.q[d11];
+        set1 = reg.q[d11];                // signal that a has been set
     }
     
     if (iodip[0][1] == 1 & iodip[0][0] == 0 & iobutton[1]){
-        reg.d[d2] = in;                   // set the reg to constant
+        reg.d[d2] = in;                   // store b     
         bb = reg.q[d2];
         reg.d[d12] =1;
-        set2 = reg.q[d12];
+        set2 = reg.q[d12];                // signal that b has been set
     }
 
 
   }
 }
-
-
