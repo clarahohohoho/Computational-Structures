@@ -1,0 +1,80 @@
+.include "nominal.jsim"
+.include "stdcell.jsim"
+.include "2dcheckoff_2p9ns.jsim"
+
+.subckt adder32 ALUFN0 a[31:0] b[31:0] s[31:0] z v n
+
+** Creating z v n **
+
+Xbuffer ALUFN0 cin buffer_8
+
+Xxor2 cin#32 b[31:0] bnew[31:0] xor2
+
+Xzero1 s[31:16] s[15:0] one[15:0] nor2
+Xzero2 one[15:8] one[7:0] two[7:0] nand2
+Xzero3 two[7:4] two[3:0] three[3:0] nor2
+Xzero4 three[3:2] three[1:0] four[1:0] nand2
+Xzero5 four1 four0 z nor2
+
+Xoverflow1 s[31] sprime inverter
+Xoverflow2 a[31] bnew[31] sprime x and3
+Xoverflow3 a[31] bnew[31] sprime y nor3
+Xoverflow5 x y v or2
+
+.connect s[31] n
+
+** g and p **
+
+Xg a[31:0] bnew[31:0] g[31:0] and2 
+Xp a[31:0] bnew[31:0] p[31:0] xor2
+
+** first layer**
+X1_p p[30:0] p[31:1] p1_[30:0] and2
+X1_g0 p0 cin g0 g1_[0] invaoi
+X1_g31 p31 g31 g30 g1_[31] invaoi
+X1_g p[30:1] g[29:0] g[30:1] g1_[30:1] invaoi
+
+** second layer **
+X2_p p1_[28:0] p1_[30:2] p2_[31:3] and2
+X2_g0 p1_[0] cin g1_[1] g2_[1] invaoi
+X2_g p1_[30:1] g1_[29:0] g1_[31:2] g2_[31:2] invaoi
+
+** third layer **
+X3_p p2_[27:3] p2_[31:7] p3_[31:7] and2
+X3_g3 p2_[3] cin g2_[3] g3_[3] invaoi
+X3_g4 p2_[4] g1_[0] g2_[4] g3_[4] invaoi
+X3_gp p2_[31:5] g2_[27:1] g2_[31:5] g3_[31:5] invaoi
+
+** fourth layer **
+X4_p p3_[23:7] p3_[31:15] p4_[31:15] and2
+X4_g7 p3_[7] cin g3_[7] g4_[7] invaoi
+X4_g8 p3_[8] g1_[0] g3_[8] g4_[8] invaoi
+X4_g9 p3_[9] g2_[1] g3_[9] g4_[9] invaoi
+X4_g10 p3_[10] g2_[2] g3_[10] g4_[10] invaoi
+X4_gp p3_[31:11] g3_[23:3] g3_[31:11] g4_[31:11] invaoi
+
+** fifth layer **
+X5_p31 0 p4_[31] p5_[31] and2
+X5_g15 p4_[15] cin g4_[15] g5_[15] invaoi
+X5_g16 p4_[16] g1_[0] g4_[16] g5_[16] invaoi
+X5_g17_18 p4_[18:17] g2_[2:1] g4_[18:17] g5_[18:17] invaoi
+X5_g19_22 p4_[22:19] g3_[6:3] g4_[22:19] g5_[22:19] invaoi
+X5_g31_23 p4_[31:23] g4_[15:7] g4_[31:23] g5_[31:23] invaoi
+
+** g and p to s **
+Xs0 cin p[0] s[0] xor2
+Xs1 g1_[0] g1_0_buffer buffer
+Xs2 g1_0_buffer p[1] s[1] xor2
+Xs3 g2_[2:1] p[3:2] s[3:2] xor2
+Xs4 g3_[6:3] p[7:4] s[7:4] xor2
+Xs5 g4_[14:7] p[15:8] s[15:8] xor2
+Xs6 g5_[30:15] p[31:16] s[31:16] xor2
+
+.ends
+
+.subckt invaoi g1 p1 p2 Q
+Xand1 g1 p1 one and2
+Xor1 one p2 Q or2
+
+.ends
+
